@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore, hasRole } from '../stores/authStore';
 import type { Profile } from '../types';
-import { formatINR, percentage, getBillingCycle, getBillingCycleLabel, cn } from '../lib/utils';
+import { getBillingCycle, getBillingCycleLabel, cn } from '../lib/utils';
 import { format, startOfWeek, endOfWeek, subDays, subWeeks, subMonths } from 'date-fns';
 import {
   Plus, Trash2, ChevronLeft, ChevronRight, Search, Download, Upload, X, Phone, Clock,
-  TrendingUp, Award, BarChart3, Activity, Calendar, Save, Grid3x3,
+  Award, Activity, Save, Grid3x3,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -49,7 +49,6 @@ export default function KpiPage() {
   const cycle = getBillingCycle(cycleDate);
   const cycleLabel = getBillingCycleLabel(cycleDate);
 
-  // Generate dates for matrix view
   const generateDates = () => {
     const start = new Date(cycle.start);
     const end = new Date(cycle.end);
@@ -96,7 +95,6 @@ export default function KpiPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Load matrix data
   const loadMatrixData = useCallback(async () => {
     const cs = cycle.start.toISOString().split('T')[0];
     const ce = cycle.end.toISOString().split('T')[0];
@@ -198,12 +196,10 @@ export default function KpiPage() {
     e.member_name.toLowerCase().includes(search.toLowerCase()) || e.date.includes(search)
   );
 
-  // Aggregations
   const totalCalls = entries.reduce((s, e) => s + e.call_attempts, 0);
   const totalTalkTime = entries.reduce((s, e) => s + e.talk_time, 0);
   const avgTalkTime = entries.length > 0 ? totalTalkTime / entries.length : 0;
 
-  // Top performer by calls
   const memberAgg = new Map<string, { name: string; calls: number; time: number }>();
   entries.forEach((e) => {
     if (!memberAgg.has(e.user_id)) memberAgg.set(e.user_id, { name: e.member_name, calls: 0, time: 0 });
@@ -213,7 +209,6 @@ export default function KpiPage() {
   });
   const topPerformer = Array.from(memberAgg.entries()).sort((a, b) => b[1].calls - a[1].calls)[0];
 
-  // Trend data
   const getTrendData = () => {
     if (trendFilter === 'daily') {
       const last7 = Array.from({ length: 7 }, (_, i) => subDays(new Date(), 6 - i));
@@ -260,7 +255,6 @@ export default function KpiPage() {
   };
   const trendData = getTrendData();
 
-  // Member breakdown for bar chart
   const memberData = Array.from(memberAgg.entries())
     .sort((a, b) => b[1].calls - a[1].calls)
     .slice(0, 8)
@@ -405,6 +399,7 @@ export default function KpiPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-primary">KPI Monitoring</h1>
@@ -421,6 +416,7 @@ export default function KpiPage() {
         </div>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="card rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -453,6 +449,7 @@ export default function KpiPage() {
         </div>
       </div>
 
+      {/* Trend Filters */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-secondary">Trend:</span>
         {(['daily', 'weekly', 'monthly'] as const).map((f) => (
@@ -462,6 +459,7 @@ export default function KpiPage() {
         ))}
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-primary mb-4">Call Trends</h3>
@@ -510,6 +508,7 @@ export default function KpiPage() {
         </div>
       </div>
 
+      {/* Actions */}
       <div className="flex flex-wrap items-center gap-3">
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search member or date..."
           className="input flex-1 min-w-[200px] max-w-md px-4 py-2.5 rounded-xl text-sm" />
@@ -519,6 +518,7 @@ export default function KpiPage() {
         <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImport} className="hidden" />
       </div>
 
+      {/* Data Table */}
       <div className="table-container rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -552,7 +552,7 @@ export default function KpiPage() {
                     ) : (
                       <span onClick={() => { setEditingCell(`${e.id}-talk_time`); setEditValue(String(e.talk_time)); }} className="text-sm text-emerald-400 cursor-pointer">{formatDuration(e.talk_time)}</span>
                     )}
-                   </td>
+                  </td>
                   <td className="px-4 py-2 text-xs text-secondary">{e.billing_cycle}</td>
                   <td className="px-4 py-2 max-w-[150px]">
                     {editingCell === `${e.id}-notes` ? (
@@ -560,7 +560,7 @@ export default function KpiPage() {
                     ) : (
                       <span onClick={() => { setEditingCell(`${e.id}-notes`); setEditValue(e.notes); }} className="text-sm text-secondary cursor-pointer truncate block">{e.notes || '-'}</span>
                     )}
-                   </td>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -636,7 +636,7 @@ export default function KpiPage() {
                             </td>
                           );
                         })}
-                      </table>
+                      </tr>
                     );
                   })}
                 </tbody>
