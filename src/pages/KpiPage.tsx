@@ -27,12 +27,6 @@ interface KpiRow {
   notes: string;
 }
 
-interface MatrixEntry {
-  user_id: string;
-  user_name: string;
-  [date: string]: { calls: number; talkTime: number } | string;
-}
-
 export default function KpiPage() {
   const { profile } = useAuthStore();
   const [entries, setEntries] = useState<KpiRow[]>([]);
@@ -279,11 +273,11 @@ export default function KpiPage() {
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const userId = (form.elements.namedItem('user_id') as HTMLSelectElement).value || profile?.id;
+    const userId = (form.elements.namedItem('user_id') as HTMLSelectElement)?.value || profile?.id;
     const date = (form.elements.namedItem('date') as HTMLInputElement).value;
     const callAttempts = parseInt((form.elements.namedItem('call_attempts') as HTMLInputElement).value) || 0;
     const talkTime = parseInt((form.elements.namedItem('talk_time') as HTMLInputElement).value) || 0;
-    const notes = (form.elements.namedItem('notes') as HTMLInputElement).value;
+    const notes = (form.elements.namedItem('notes') as HTMLInputElement).value || '';
 
     if (!date) { toast.error('Date required'); return; }
 
@@ -342,14 +336,16 @@ export default function KpiPage() {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'KPI');
-    fmt === 'csv' ? (() => {
+    if (fmt === 'csv') {
       const csv = XLSX.utils.sheet_to_csv(ws);
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = 'kpi.csv'; a.click();
       URL.revokeObjectURL(url);
-    })() : XLSX.writeFile(wb, 'kpi.xlsx');
+    } else {
+      XLSX.writeFile(wb, 'kpi.xlsx');
+    }
     toast.success(`Exported as ${fmt.toUpperCase()}`);
   };
 
@@ -556,7 +552,7 @@ export default function KpiPage() {
                     ) : (
                       <span onClick={() => { setEditingCell(`${e.id}-talk_time`); setEditValue(String(e.talk_time)); }} className="text-sm text-emerald-400 cursor-pointer">{formatDuration(e.talk_time)}</span>
                     )}
-                  </td>
+                   </td>
                   <td className="px-4 py-2 text-xs text-secondary">{e.billing_cycle}</td>
                   <td className="px-4 py-2 max-w-[150px]">
                     {editingCell === `${e.id}-notes` ? (
@@ -564,7 +560,7 @@ export default function KpiPage() {
                     ) : (
                       <span onClick={() => { setEditingCell(`${e.id}-notes`); setEditValue(e.notes); }} className="text-sm text-secondary cursor-pointer truncate block">{e.notes || '-'}</span>
                     )}
-                  </td>
+                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -640,7 +636,7 @@ export default function KpiPage() {
                             </td>
                           );
                         })}
-                      </tr>
+                      </table>
                     );
                   })}
                 </tbody>
@@ -673,4 +669,21 @@ export default function KpiPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">Call Attempts</label>
-                <input name="call_attempts" type="
+                <input name="call_attempts" type="number" min="0" defaultValue="0" className="input w-full px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Talk Time (seconds)</label>
+                <input name="talk_time" type="number" min="0" defaultValue="0" className="input w-full px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Notes</label>
+              <input name="notes" type="text" className="input w-full px-3 py-2 text-sm" />
+            </div>
+            <button type="submit" className="btn-primary w-full py-2.5 font-semibold rounded-xl text-sm">Add Entry</button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
