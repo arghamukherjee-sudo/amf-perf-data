@@ -238,7 +238,11 @@ export default function DashboardPage() {
     }
   }, [cycleOffset, profile, selectedMember]);
 
-  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  // FIXED: Changed from [loadDashboard] to [cycleOffset, profile, selectedMember]
+  // This prevents the infinite re-rendering loop that was causing constant API calls
+  useEffect(() => {
+    loadDashboard();
+  }, [cycleOffset, profile, selectedMember]);
 
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
