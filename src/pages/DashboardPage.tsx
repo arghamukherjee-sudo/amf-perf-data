@@ -77,8 +77,9 @@ export default function DashboardPage() {
         .gte('date', cs).lte('date', ce);
       if (memberFilter) attendanceQuery = attendanceQuery.eq('user_id', memberFilter);
 
-      let callsQuery = supabase.from('call_logs').select('user_id, duration_seconds, called_at')
-        .gte('called_at', cs).lte('called_at', ce + 'T23:59:59');
+      // FIXED: Query daily_kpi for calls data (includes call_attempts and talk_time)
+      let callsQuery = supabase.from('daily_kpi').select('user_id, talk_time, call_attempts, date')
+        .gte('date', cs).lte('date', ce);
       if (memberFilter) callsQuery = callsQuery.eq('user_id', memberFilter);
 
       let kpiQuery = supabase.from('kpi_metrics').select('user_id, metric_name, target_value, achieved_value, weight')
@@ -119,8 +120,10 @@ export default function DashboardPage() {
       const countedAtt = attendances.filter((a: any) => a.status !== 'week_off');
       const presentCount = countedAtt.filter((a: any) => a.status === 'present' || a.status === 'half_day').length;
       const attendancePct = countedAtt.length > 0 ? percentage(presentCount, countedAtt.length) : 0;
-      const totalCalls = calls.length;
-      const totalTalkTime = calls.reduce((s: number, c: any) => s + Number(c.duration_seconds), 0);
+      
+      // FIXED: Sum call_attempts instead of counting records
+      const totalCalls = calls.reduce((s: number, c: any) => s + (c.call_attempts || 0), 0);
+      const totalTalkTime = calls.reduce((s: number, c: any) => s + (c.talk_time || 0), 0);
 
       // Weekly revenue (current week)
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -136,8 +139,7 @@ export default function DashboardPage() {
       const monthlyRevenue = totalRevenue;
       const achievementPct = percentage(totalRevenue, totalTarget);
 
-      // FIXED: ARPU = Total Revenue / Total Leads Assigned (NOT multiplied by 100)
-      // Example: ₹3,58,248 ÷ 391 = ₹916
+      // FIXED: ARPU = Total Revenue / Total Leads Assigned
       const arpu = totalLeadsAssigned > 0 ? totalRevenue / totalLeadsAssigned : 0;
 
       // Best Performer (from lead_assignments revenue)
@@ -191,17 +193,17 @@ export default function DashboardPage() {
         score: percentage(Number(k.achieved_value), Number(k.target_value)),
       }));
 
-      // Calls Trend (last 7 days)
+      // FIXED: Calls Trend - sum call_attempts and talk_time from daily_kpi
       const callsTrend: Array<{ date: string; calls: number; duration: number }> = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const ds = d.toISOString().split('T')[0];
-        const dayCalls = calls.filter((c: any) => (c.called_at || '').startsWith(ds));
+        const dayCalls = calls.filter((c: any) => c.date === ds);
         callsTrend.push({
           date: format(d, 'EEE'),
-          calls: dayCalls.length,
-          duration: Math.round(dayCalls.reduce((s: number, c: any) => s + Number(c.duration_seconds), 0) / 60),
+          calls: dayCalls.reduce((s: number, c: any) => s + (c.call_attempts || 0), 0),
+          duration: Math.round(dayCalls.reduce((s: number, c: any) => s + (c.talk_time || 0), 0) / 60),
         });
       }
 
@@ -238,8 +240,6 @@ export default function DashboardPage() {
     }
   }, [cycleOffset, profile, selectedMember]);
 
-  // FIXED: Changed from [loadDashboard] to [cycleOffset, profile, selectedMember]
-  // This prevents the infinite re-rendering loop that was causing constant API calls
   useEffect(() => {
     loadDashboard();
   }, [cycleOffset, profile, selectedMember]);
@@ -253,7 +253,6 @@ export default function DashboardPage() {
 
   if (loading || !data) return <div className="flex items-center justify-center min-h-[60vh]"><Spinner size="lg" /></div>;
 
-  // Theme-aware tooltip style using CSS variables
   const tooltipStyle = {
     background: 'rgb(var(--bg-elevated))',
     border: '1px solid rgb(var(--border-default))',
@@ -262,7 +261,6 @@ export default function DashboardPage() {
     fontSize: '12px'
   };
 
-  // Theme-aware chart colors
   const chartGridColor = 'rgb(var(--border-default))';
   const chartAxisColor = 'rgb(var(--text-muted))';
   const chartPrimaryColor = 'rgb(var(--chart-primary, #3b82f6))';
@@ -507,7 +505,6 @@ export default function DashboardPage() {
 function KPICard({ title, value, icon: Icon, trend, trendLabel, subtext, color }: {
   title: string; value: string; icon: React.ElementType; trend?: number; trendLabel?: string; subtext?: string; color: string;
 }) {
-  // Theme-aware color mapping using CSS custom properties
   const colorMap: Record<string, { bgVar: string; colorVar: string }> = {
     blue: { bgVar: 'var(--color-blue-bg, rgba(59, 130, 246, 0.1))', colorVar: 'var(--color-blue, #3b82f6)' },
     emerald: { bgVar: 'var(--color-emerald-bg, rgba(16, 185, 129, 0.1))', colorVar: 'var(--color-emerald, #10b981)' },
