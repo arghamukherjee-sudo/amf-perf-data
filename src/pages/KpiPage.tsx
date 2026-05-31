@@ -5,7 +5,7 @@ import type { Profile } from '../types';
 import { getBillingCycle, getBillingCycleLabel, cn } from '../lib/utils';
 import { format, startOfWeek, endOfWeek, subDays, subWeeks, subMonths } from 'date-fns';
 import {
-  Plus, Trash2, ChevronLeft, ChevronRight, Search, Download, Upload, X, Phone, Clock,
+  Plus, Trash2, ChevronLeft, ChevronRight, Download, Upload, X, Phone, Clock,
   Award, Activity, Save, Grid3x3,
 } from 'lucide-react';
 import {
@@ -256,13 +256,13 @@ export default function KpiPage() {
   const trendData = getTrendData();
 
   const memberData = Array.from(memberAgg.entries())
-    .sort((a, b) => b[1].calls - a[1].calls)
-    .slice(0, 8)
-    .map(([id, agg]) => ({
-      name: agg.name.length > 10 ? agg.name.substring(0, 10) + '..' : agg.name,
-      calls: agg.calls,
-      talkTime: Math.round(agg.time / 60),
-    }));
+  .sort((a, b) => b[1].calls - a[1].calls)
+  .slice(0, 8)
+  .map(([_id, agg]) => ({
+    name: agg.name.length > 10 ? agg.name.substring(0, 10) + '..' : agg.name,
+    calls: agg.calls,
+    talkTime: Math.round(agg.time / 60),
+  }));
 
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
