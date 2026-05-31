@@ -6,7 +6,7 @@ import { formatINR, percentage, getBillingCycle, getBillingCycleLabel, cn } from
 import { format, startOfWeek, endOfWeek, subDays, subWeeks, subMonths } from 'date-fns';
 import {
   Plus, Trash2, ChevronLeft, ChevronRight, Search, Download, Upload, X, Phone, Clock,
-  TrendingUp, Award, BarChart3, Activity,
+  TrendingUp, Award, BarChart3, Activity, Calendar, Save, Grid3x3,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -27,6 +27,12 @@ interface KpiRow {
   notes: string;
 }
 
+interface MatrixEntry {
+  user_id: string;
+  user_name: string;
+  [date: string]: { calls: number; talkTime: number } | string;
+}
+
 export default function KpiPage() {
   const { profile } = useAuthStore();
   const [entries, setEntries] = useState<KpiRow[]>([]);
@@ -36,15 +42,29 @@ export default function KpiPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(false);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [trendFilter, setTrendFilter] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [matrixData, setMatrixData] = useState<any>({});
+  const [matrixSaving, setMatrixSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const cycleDate = new Date();
   cycleDate.setMonth(cycleDate.getMonth() + cycleOffset);
   const cycle = getBillingCycle(cycleDate);
   const cycleLabel = getBillingCycleLabel(cycleDate);
+
+  // Generate dates for matrix view
+  const generateDates = () => {
+    const start = new Date(cycle.start);
+    const end = new Date(cycle.end);
+    const dates: string[] = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -81,6 +101,104 @@ export default function KpiPage() {
   }, [cycleOffset, profile]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load matrix data
+  const loadMatrixData = useCallback(async () => {
+    const cs = cycle.start.toISOString().split('T')[0];
+    const ce = cycle.end.toISOString().split('T')[0];
+    
+    const { data: members } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('is_active', true);
+    
+    const { data: existingEntries } = await supabase
+      .from('daily_kpi')
+      .select('user_id, date, call_attempts, talk_time')
+      .gte('date', cs)
+      .lte('date', ce);
+    
+    const dates = generateDates();
+    const matrix: any = {};
+    
+    members?.forEach((member: any) => {
+      matrix[member.id] = {
+        user_name: member.full_name || member.email,
+        user_id: member.id,
+      };
+      dates.forEach((date) => {
+        const entry = existingEntries?.find(
+          (e: any) => e.user_id === member.id && e.date === date
+        );
+        matrix[member.id][date] = {
+          calls: entry?.call_attempts || 0,
+          talkTime: entry?.talk_time || 0,
+        };
+      });
+    });
+    
+    setMatrixData(matrix);
+  }, [cycleOffset]);
+
+  const handleOpenMatrix = () => {
+    loadMatrixData();
+    setShowMatrix(true);
+  };
+
+  const updateMatrixCell = (userId: string, date: string, field: 'calls' | 'talkTime', value: number) => {
+    setMatrixData((prev: any) => ({
+      ...prev,
+      [userId]: {
+        ...prev[userId],
+        [date]: {
+          ...prev[userId]?.[date],
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const saveMatrixData = async () => {
+    setMatrixSaving(true);
+    try {
+      const cs = cycle.start.toISOString().split('T')[0];
+      const ce = cycle.end.toISOString().split('T')[0];
+      const records: any[] = [];
+      
+      for (const [userId, userData] of Object.entries(matrixData)) {
+        if (userId === 'user_name' || userId === 'user_id') continue;
+        const dates = generateDates();
+        for (const date of dates) {
+          const cellData = (userData as any)[date];
+          if (cellData && (cellData.calls > 0 || cellData.talkTime > 0)) {
+            records.push({
+              user_id: userId,
+              date: date,
+              call_attempts: cellData.calls,
+              talk_time: cellData.talkTime,
+              billing_cycle_start: cs,
+              billing_cycle_end: ce,
+            });
+          }
+        }
+      }
+      
+      if (records.length > 0) {
+        const { error } = await supabase.from('daily_kpi').upsert(records, { 
+          onConflict: 'user_id,date' 
+        });
+        if (error) throw error;
+      }
+      
+      toast.success(`Saved ${records.length} records`);
+      await loadData();
+      setShowMatrix(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save');
+    } finally {
+      setMatrixSaving(false);
+    }
+  };
 
   const filtered = entries.filter((e) =>
     e.member_name.toLowerCase().includes(search.toLowerCase()) || e.date.includes(search)
@@ -283,6 +401,8 @@ export default function KpiPage() {
     return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
   };
 
+  const dates = generateDates();
+
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Spinner size="lg" /></div>;
 
   const tooltipStyle = { background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '12px' };
@@ -300,6 +420,7 @@ export default function KpiPage() {
           <button onClick={() => setCycleOffset((p) => p + 1)} className="btn-secondary p-2"><ChevronRight className="w-4 h-4" /></button>
           <div className="w-px h-6 bg-[rgb(var(--border-default))]" />
           <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-1"><Plus className="w-4 h-4" />Add</button>
+          <button onClick={handleOpenMatrix} className="btn-secondary flex items-center gap-1"><Grid3x3 className="w-4 h-4" />Matrix View</button>
           {selected.size > 0 && <button onClick={handleBulkDelete} className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg flex items-center gap-1"><Trash2 className="w-4 h-4" />Delete ({selected.size})</button>}
         </div>
       </div>
@@ -446,12 +567,90 @@ export default function KpiPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-secondary text-sm">No KPI entries</td></tr>}
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-secondary text-sm">No KPI entries</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Matrix View Modal */}
+      {showMatrix && (
+        <div className="fixed inset-0 z-50 bg-black/60 overflow-auto p-4">
+          <div className="card rounded-2xl w-full max-w-[95vw] mx-auto my-4">
+            <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10">
+              <div>
+                <h2 className="text-lg font-bold text-primary">Matrix View - Daily KPI Entry</h2>
+                <p className="text-xs text-muted">{cycleLabel}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={saveMatrixData} disabled={matrixSaving} className="btn-primary flex items-center gap-2">
+                  <Save className="w-4 h-4" />
+                  {matrixSaving ? 'Saving...' : 'Save All'}
+                </button>
+                <button onClick={() => setShowMatrix(false)} className="btn-secondary p-2">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto p-4">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-secondary">
+                    <th className="p-2 sticky left-0 bg-secondary z-10 min-w-[120px] text-left">Team Member</th>
+                    {dates.map((date) => (
+                      <th key={date} className="p-2 min-w-[110px]">
+                        <div className="text-center">
+                          <div className="font-medium">{format(new Date(date), 'dd MMM')}</div>
+                          <div className="text-[10px] text-muted">{format(new Date(date), 'EEE')}</div>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(matrixData).map(([userId, userData]: [string, any]) => {
+                    if (userId === 'user_name' || userId === 'user_id') return null;
+                    return (
+                      <tr key={userId} className="border-b border-border">
+                        <td className="p-2 sticky left-0 bg-card font-medium min-w-[120px]">
+                          {userData.user_name}
+                        </td>
+                        {dates.map((date) => {
+                          const cellData = userData[date] || { calls: 0, talkTime: 0 };
+                          return (
+                            <td key={date} className="p-2">
+                              <div className="space-y-1">
+                                <input
+                                  type="number"
+                                  placeholder="Calls"
+                                  value={cellData.calls || ''}
+                                  onChange={(e) => updateMatrixCell(userId, date, 'calls', parseInt(e.target.value) || 0)}
+                                  className="input w-full text-xs p-1 text-center"
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Talk Time (sec)"
+                                  value={cellData.talkTime || ''}
+                                  onChange={(e) => updateMatrixCell(userId, date, 'talkTime', parseInt(e.target.value) || 0)}
+                                  className="input w-full text-xs p-1 text-center"
+                                />
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Entry Modal */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <form onSubmit={handleAdd} className="card rounded-2xl p-6 w-full max-w-md space-y-4">
@@ -474,21 +673,4 @@ export default function KpiPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">Call Attempts</label>
-                <input name="call_attempts" type="number" min="0" defaultValue="0" className="input w-full px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Talk Time (seconds)</label>
-                <input name="talk_time" type="number" min="0" defaultValue="0" className="input w-full px-3 py-2 text-sm" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Notes</label>
-              <input name="notes" type="text" className="input w-full px-3 py-2 text-sm" />
-            </div>
-            <button type="submit" className="btn-primary w-full py-2.5 font-semibold rounded-xl text-sm">Add Entry</button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-}
+                <input name="call_attempts" type="
