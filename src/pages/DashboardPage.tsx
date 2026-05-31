@@ -136,9 +136,9 @@ export default function DashboardPage() {
       const monthlyRevenue = totalRevenue;
       const achievementPct = percentage(totalRevenue, totalTarget);
 
-      // ARPU - Average Revenue Per User
-      const activeUsers = new Set(leads.map((l: any) => l.user_id)).size;
-      const arpu = activeUsers > 0 ? totalRevenue / activeUsers : 0;
+      // FIXED: ARPU = Total Revenue / Total Leads Assigned (NOT multiplied by 100)
+      // Example: ₹3,58,248 ÷ 391 = ₹916
+      const arpu = totalLeadsAssigned > 0 ? totalRevenue / totalLeadsAssigned : 0;
 
       // Best Performer (from lead_assignments revenue)
       const performerMap: Record<string, { name: string; achieved: number; target: number }> = {};
