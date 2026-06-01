@@ -6,13 +6,14 @@ import { format, startOfWeek, endOfWeek } from 'date-fns';
 import {
   IndianRupee, Users, CalendarCheck, Phone, Clock, TrendingUp,
   Award, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Filter,
-  BarChart3, Activity, Gauge,
+  BarChart3, Activity, Gauge, Edit3,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts';
 import Spinner from '../components/ui/Spinner';
+import EditTargetsModal from '../components/EditTargetsModal';
 import type { Profile } from '../types';
 
 // Theme-aware chart colors that work in both light and dark mode
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedMember, setSelectedMember] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showEditTargets, setShowEditTargets] = useState(false);
 
   const cycleDate = new Date();
   cycleDate.setMonth(cycleDate.getMonth() + cycleOffset);
@@ -187,10 +189,22 @@ export default function DashboardPage() {
         });
       }
 
-      // KPI Trend
-      const kpiTrend = kpis.map((k: any) => ({
-        metric: k.metric_name.length > 14 ? k.metric_name.substring(0, 14) + '..' : k.metric_name,
-        score: percentage(Number(k.achieved_value), Number(k.target_value)),
+      // FIXED: KPI Trend - Average per metric instead of per user (removes duplicates)
+      const metricMap = new Map<string, { total: number; count: number }>();
+      kpis.forEach((k: any) => {
+        const metric = k.metric_name;
+        const score = percentage(Number(k.achieved_value), Number(k.target_value));
+        if (!metricMap.has(metric)) {
+          metricMap.set(metric, { total: 0, count: 0 });
+        }
+        const existing = metricMap.get(metric)!;
+        existing.total += score;
+        existing.count += 1;
+      });
+
+      const kpiTrend = Array.from(metricMap.entries()).map(([metric, data]) => ({
+        metric: metric.length > 14 ? metric.substring(0, 14) + '..' : metric,
+        score: Math.round(data.total / data.count),
       }));
 
       // FIXED: Calls Trend - sum call_attempts and talk_time from daily_kpi
@@ -285,9 +299,15 @@ export default function DashboardPage() {
             <ChevronRight className="w-4 h-4" />
           </button>
           {hasRole('admin') && (
-            <button onClick={() => setShowFilters(!showFilters)} className={cn('px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2', showFilters ? 'btn-primary' : 'btn-ghost')}>
-              <Filter className="w-4 h-4" />Filters
-            </button>
+            <>
+              <button onClick={() => setShowEditTargets(true)} className="btn-secondary flex items-center gap-1">
+                <Edit3 className="w-4 h-4" />
+                Edit Targets
+              </button>
+              <button onClick={() => setShowFilters(!showFilters)} className={cn('px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2', showFilters ? 'btn-primary' : 'btn-ghost')}>
+                <Filter className="w-4 h-4" />Filters
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -331,19 +351,20 @@ export default function DashboardPage() {
           subtext={data.bestPerformer ? `${data.bestPerformer.pct}% achievement` : undefined} />
       </div>
 
-      {/* Achievement Bar */}
+      {/* Achievement Bar - FIXED with direct colors */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-primary">Cycle Achievement</h3>
-          <span className="text-2xl font-bold" style={{ color: 'rgb(var(--chart-primary, #3b82f6))' }}>{data.achievementPct}%</span>
+          <span className="text-2xl font-bold" style={{ color: '#3b82f6' }}>{data.achievementPct}%</span>
         </div>
-        <div className="w-full rounded-full h-3" style={{ background: 'rgb(var(--bg-secondary))' }}>
-          <div className="h-3 rounded-full transition-all duration-500" style={{
-            width: `${Math.min(data.achievementPct, 100)}%`,
-            background: data.achievementPct >= 100
-              ? 'linear-gradient(90deg, rgb(var(--chart-success, #10b981)), rgb(var(--chart-success-light, #34d399)))'
-              : 'linear-gradient(90deg, rgb(var(--chart-primary, #3b82f6)), rgb(var(--chart-primary-light, #60a5fa)))',
-          }} />
+        <div className="w-full rounded-full h-3" style={{ background: '#e2e8f0' }}>
+          <div 
+            className="h-3 rounded-full transition-all duration-500" 
+            style={{
+              width: `${Math.min(data.achievementPct, 100)}%`,
+              background: data.achievementPct >= 100 ? '#10b981' : '#3b82f6',
+            }} 
+          />
         </div>
         <div className="flex justify-between mt-2 text-xs text-muted">
           <span>{formatINR(data.totalRevenue)} achieved</span>
@@ -498,6 +519,19 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Targets Modal */}
+      {showEditTargets && (
+        <EditTargetsModal
+          cycleStart={cycle.start.toISOString().split('T')[0]}
+          cycleEnd={cycle.end.toISOString().split('T')[0]}
+          onSuccess={() => {
+            setShowEditTargets(false);
+            loadDashboard();
+          }}
+          onCancel={() => setShowEditTargets(false)}
+        />
+      )}
     </div>
   );
 }
