@@ -40,6 +40,20 @@ interface ExtendedProfile extends Profile {
   joining_date?: string;
 }
 
+interface RankedMember {
+  id: string;
+  full_name: string;
+  email: string;
+  total_revenue: number;
+  total_leads: number;
+  total_calls: number;
+  total_talk_time: number;
+  attendance_pct: number;
+  arpu: number;
+  achievement_pct: number;
+  overall_score: number;
+}
+
 const initialFormData: TeamMemberFormData = {
   full_name: '',
   email: '',
@@ -61,8 +75,23 @@ const statusOptions = [
   { value: 'inactive', label: 'Inactive' },
 ];
 
+const formatDuration = (seconds: number) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
+};
+
+const formatINR = (amount: number) => {
+  if (amount === 0) return '₹0';
+  return new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 export default function TeamPage() {
   const [members, setMembers] = useState<ExtendedProfile[]>([]);
+  const [rankedMembers, setRankedMembers] = useState<RankedMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
@@ -98,9 +127,149 @@ export default function TeamPage() {
     }
   }, []);
 
+  const fetchRankedMembers = useCallback(async () => {
+    try {
+      const cs = '2026-05-26';
+      const ce = '2026-06-25';
+
+      // Fetch lead assignments
+      const { data: leads } = await supabase
+        .from('lead_assignments')
+        .select('user_id, revenue, leads_assigned')
+        .gte('billing_cycle_start', cs)
+        .lte('billing_cycle_end', ce);
+
+      // Fetch daily_kpi for calls and talk time
+      const { data: kpi } = await supabase
+        .from('daily_kpi')
+        .select('user_id, call_attempts, talk_time')
+        .gte('date', cs)
+        .lte('date', ce);
+
+      // Fetch attendance
+      const { data: attendance } = await supabase
+        .from('attendance_entries')
+        .select('user_id, status')
+        .gte('date', cs)
+        .lte('date', ce);
+
+      // Fetch monthly targets
+      const { data: targets } = await supabase
+        .from('monthly_targets')
+        .select('user_id, target_value')
+        .eq('category', 'revenue')
+        .eq('billing_cycle_start', cs)
+        .eq('billing_cycle_end', ce);
+
+      // Aggregate per user
+      const userMap = new Map();
+      
+      members.forEach(member => {
+        userMap.set(member.id, {
+          id: member.id,
+          full_name: member.full_name,
+          email: member.email,
+          total_revenue: 0,
+          total_leads: 0,
+          total_calls: 0,
+          total_talk_time: 0,
+          attendance_count: 0,
+          attendance_pct: 0,
+          achievement_pct: 0,
+        });
+      });
+
+      // Add revenue and leads
+      leads?.forEach(l => {
+        const user = userMap.get(l.user_id);
+        if (user) {
+          user.total_revenue += l.revenue || 0;
+          user.total_leads += l.leads_assigned || 0;
+        }
+      });
+
+      // Add calls and talk time
+      kpi?.forEach(k => {
+        const user = userMap.get(k.user_id);
+        if (user) {
+          user.total_calls += k.call_attempts || 0;
+          user.total_talk_time += k.talk_time || 0;
+        }
+      });
+
+      // Calculate attendance percentage
+      const attendanceCount = new Map();
+      const presentStatuses = ['present', 'half_day'];
+      attendance?.forEach(a => {
+        if (presentStatuses.includes(a.status)) {
+          attendanceCount.set(a.user_id, (attendanceCount.get(a.user_id) || 0) + 1);
+        }
+      });
+      
+      const totalDays = 30;
+      attendanceCount.forEach((count, userId) => {
+        const user = userMap.get(userId);
+        if (user) {
+          user.attendance_pct = Math.round((count / totalDays) * 100);
+        }
+      });
+
+      // Set default attendance for users with no records
+      userMap.forEach(user => {
+        if (user.attendance_pct === 0 && user.total_leads > 0) {
+          user.attendance_pct = 100;
+        }
+      });
+
+      // Calculate achievement percentage
+      const targetMap = new Map();
+      targets?.forEach(t => {
+        targetMap.set(t.user_id, t.target_value);
+      });
+
+      const rankedList: RankedMember[] = [];
+      userMap.forEach(user => {
+        const target = targetMap.get(user.id) || 700000;
+        const achievement_pct = user.total_revenue > 0 ? Math.round((user.total_revenue / target) * 100 * 10) / 10 : 0;
+        const arpu = user.total_leads > 0 ? user.total_revenue / user.total_leads : 0;
+        
+        // Calculate overall score (custom formula)
+        const revenueScore = Math.min((user.total_revenue / 100000) * 0.4, 40);
+        const callsScore = Math.min((user.total_calls / 500) * 0.3, 30);
+        const attendanceScore = (user.attendance_pct / 100) * 30;
+        const overall_score = Math.round((revenueScore + callsScore + attendanceScore) * 10) / 10;
+        
+        rankedList.push({
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          total_revenue: user.total_revenue,
+          total_leads: user.total_leads,
+          total_calls: user.total_calls,
+          total_talk_time: user.total_talk_time,
+          attendance_pct: user.attendance_pct,
+          arpu: arpu,
+          achievement_pct: achievement_pct,
+          overall_score: overall_score,
+        });
+      });
+
+      const sorted = rankedList.sort((a, b) => b.overall_score - a.overall_score);
+      setRankedMembers(sorted);
+    } catch (error) {
+      console.error('Error fetching rankings:', error);
+    }
+  }, [members]);
+
   useEffect(() => {
     fetchMembers();
   }, [fetchMembers]);
+
+  useEffect(() => {
+    if (members.length > 0) {
+      fetchRankedMembers();
+    }
+  }, [members, fetchRankedMembers]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -118,7 +287,6 @@ export default function TeamPage() {
 
   const copyInviteLink = async (member: ExtendedProfile) => {
     try {
-      // Check if there's an existing invitation
       const { data: existingInvite } = await supabase
         .from('invitations')
         .select('token, expires_at')
@@ -132,7 +300,6 @@ export default function TeamPage() {
       if (existingInvite) {
         token = existingInvite.token;
       } else {
-        // Create new invitation
         token = crypto.randomUUID();
         const { data: { user } } = await supabase.auth.getUser();
 
@@ -189,7 +356,6 @@ export default function TeamPage() {
 
     setSubmitting(true);
     try {
-      // Check if user with this email already exists
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('id, email')
@@ -202,7 +368,6 @@ export default function TeamPage() {
         return;
       }
 
-      // Check if there's already a pending invitation
       const { data: existingInvite } = await supabase
         .from('invitations')
         .select('id')
@@ -217,10 +382,7 @@ export default function TeamPage() {
         return;
       }
 
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-
-      // Generate token and create invitation
       const token = crypto.randomUUID();
 
       const { error: inviteError } = await supabase
@@ -236,10 +398,8 @@ export default function TeamPage() {
 
       if (inviteError) throw inviteError;
 
-      // Generate the invite link with the token
       const inviteLink = generateInviteLinkFromToken(token);
 
-      // Try to copy to clipboard
       try {
         await navigator.clipboard.writeText(inviteLink);
         toast.success('Invitation created! Link copied to clipboard. Share it with the new team member.');
@@ -592,6 +752,78 @@ export default function TeamPage() {
         </div>
       </div>
 
+      {/* Team Rankings Table */}
+      <div className="card rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-primary mb-4">Team Rankings</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary rounded-lg">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">Rank</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">Team Member</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Revenue</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Leads</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Attendance %</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Calls</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Talk Time</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">ARPU</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Achievement %</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Overall</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rankedMembers.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-8 text-center text-secondary">
+                    No ranking data available
+                  </td>
+                </tr>
+              ) : (
+                rankedMembers.map((member, index) => (
+                  <tr key={member.id} className="border-b border-border hover:bg-secondary/20 transition">
+                    <td className="px-4 py-3 text-center font-bold text-primary">{index + 1}</td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="font-medium text-primary">{member.full_name}</div>
+                        <div className="text-xs text-muted">{member.email}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-primary">{formatINR(member.total_revenue)}</td>
+                    <td className="px-4 py-3 text-right text-primary">{member.total_leads}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={cn(
+                        'px-2 py-1 rounded-full text-xs font-medium',
+                        member.attendance_pct >= 90 ? 'bg-green-100 text-green-700' :
+                        member.attendance_pct >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
+                      )}>
+                        {member.attendance_pct}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-primary">{member.total_calls}</td>
+                    <td className="px-4 py-3 text-right text-primary">{formatDuration(member.total_talk_time)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-primary">
+                      {member.total_leads > 0 ? formatINR(member.arpu) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={cn(
+                        'px-2 py-1 rounded-full text-xs font-medium',
+                        member.achievement_pct >= 100 ? 'bg-green-100 text-green-700' :
+                        member.achievement_pct >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
+                      )}>
+                        {member.achievement_pct}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-primary">{member.overall_score}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Search and Filters */}
       <div className="card rounded-xl p-4 mb-4">
         <div className="flex flex-col md:flex-row gap-4">
@@ -690,7 +922,7 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Members Table */}
       <div className="table-container rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -708,14 +940,10 @@ export default function TeamPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">Full Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-secondary hidden md:table-cell">Mobile</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-secondary hidden lg:table-cell">
-                  Designation
-                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-secondary hidden lg:table-cell">Designation</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">Role</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-secondary hidden xl:table-cell">
-                  Joining Date
-                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-secondary hidden xl:table-cell">Joining Date</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">Actions</th>
               </tr>
             </thead>
@@ -744,7 +972,6 @@ export default function TeamPage() {
                         )}
                       </button>
                     </td>
-                    {/* Full Name */}
                     <td className="px-4 py-3">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'full_name' ? (
                         <div className="flex items-center gap-1">
@@ -776,7 +1003,6 @@ export default function TeamPage() {
                         </div>
                       )}
                     </td>
-                    {/* Email */}
                     <td className="px-4 py-3">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'email' ? (
                         <div className="flex items-center gap-1">
@@ -808,7 +1034,6 @@ export default function TeamPage() {
                         </div>
                       )}
                     </td>
-                    {/* Mobile */}
                     <td className="px-4 py-3 hidden md:table-cell">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'phone' ? (
                         <div className="flex items-center gap-1">
@@ -840,7 +1065,6 @@ export default function TeamPage() {
                         </div>
                       )}
                     </td>
-                    {/* Designation */}
                     <td className="px-4 py-3 hidden lg:table-cell">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'designation' ? (
                         <div className="flex items-center gap-1">
@@ -874,7 +1098,6 @@ export default function TeamPage() {
                         </div>
                       )}
                     </td>
-                    {/* Role */}
                     <td className="px-4 py-3">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'role' ? (
                         <div className="flex items-center gap-1">
@@ -898,10 +1121,7 @@ export default function TeamPage() {
                           </button>
                         </div>
                       ) : (
-                        <div
-                          className="cursor-pointer group"
-                          onClick={() => startInlineEdit(member, 'role')}
-                        >
+                        <div className="cursor-pointer group" onClick={() => startInlineEdit(member, 'role')}>
                           <span
                             className={cn(
                               'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
@@ -916,7 +1136,6 @@ export default function TeamPage() {
                         </div>
                       )}
                     </td>
-                    {/* Status */}
                     <td className="px-4 py-3">
                       <button
                         onClick={() => toggleStatus(member)}
@@ -940,7 +1159,6 @@ export default function TeamPage() {
                         )}
                       </button>
                     </td>
-                    {/* Joining Date */}
                     <td className="px-4 py-3 hidden xl:table-cell">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'joining_date' ? (
                         <div className="flex items-center gap-1">
@@ -976,7 +1194,6 @@ export default function TeamPage() {
                         </div>
                       )}
                     </td>
-                    {/* Actions */}
                     <td className="px-4 py-3">
                       <div className="relative">
                         <button
