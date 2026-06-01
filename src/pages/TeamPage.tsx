@@ -111,6 +111,55 @@ export default function TeamPage() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  const generateInviteLinkFromToken = (token: string) => {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/invite?token=${encodeURIComponent(token)}`;
+  };
+
+  const copyInviteLink = async (member: ExtendedProfile) => {
+    try {
+      // Check if there's an existing invitation
+      const { data: existingInvite } = await supabase
+        .from('invitations')
+        .select('token, expires_at')
+        .eq('email', member.email)
+        .eq('is_accepted', false)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+
+      let token: string;
+
+      if (existingInvite) {
+        token = existingInvite.token;
+      } else {
+        // Create new invitation
+        token = crypto.randomUUID();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        const { error: inviteError } = await supabase
+          .from('invitations')
+          .insert({
+            email: member.email,
+            role: member.role,
+            invited_by: user?.id,
+            token: token,
+            is_accepted: false,
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          });
+
+        if (inviteError) throw inviteError;
+      }
+
+      const inviteLink = generateInviteLinkFromToken(token);
+      await navigator.clipboard.writeText(inviteLink);
+      toast.success('Invite link copied to clipboard!');
+    } catch (error) {
+      console.error('Error creating invite link:', error);
+      toast.error('Failed to create invite link');
+    }
+    setShowActionsMenu(null);
+  };
+
   const filteredMembers = members.filter((member) => {
     const matchesSearch =
       member.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -130,11 +179,6 @@ export default function TeamPage() {
     superAdmins: members.filter((m) => m.role === 'super_admin').length,
     admins: members.filter((m) => m.role === 'admin').length,
     teamMembers: members.filter((m) => m.role === 'team_member').length,
-  };
-
-  const generateInviteLinkFromToken = (token: string) => {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/invite?token=${encodeURIComponent(token)}`;
   };
 
   const handleAddMember = async () => {
@@ -187,7 +231,7 @@ export default function TeamPage() {
           invited_by: user?.id,
           token: token,
           is_accepted: false,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         });
 
       if (inviteError) throw inviteError;
@@ -424,9 +468,9 @@ export default function TeamPage() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
+      const jsonData: unknown[] = XLSX.utils.sheet_to_json(sheet);
 
-      const membersToImport = jsonData.map((row: Record<string, unknown>) => ({
+      const membersToImport = jsonData.map((row: any) => ({
         full_name: String(row['Full Name'] || row['full_name'] || ''),
         email: String(row['Email'] || row['email'] || ''),
         phone: String(row['Mobile'] || row['phone'] || '') || null,
