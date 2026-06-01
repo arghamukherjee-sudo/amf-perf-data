@@ -16,15 +16,20 @@ export function formatINRShort(amount: number): string {
   return formatINR(amount);
 }
 
+// FIXED: Billing cycle logic based on current date
+// If date is 26th or later: cycle is 26th of current month to 25th of next month
+// If date is before 26th: cycle is 26th of previous month to 25th of current month
 export function getBillingCycle(date: Date = new Date()): { start: Date; end: Date } {
   const day = date.getDate();
   let start: Date;
   let end: Date;
 
   if (day >= 26) {
+    // Current cycle: 26th of this month to 25th of next month
     start = setDate(date, 26);
     end = setDate(addMonths(date, 1), 25);
   } else {
+    // Current cycle: 26th of previous month to 25th of this month
     start = setDate(addMonths(date, -1), 26);
     end = setDate(date, 25);
   }
@@ -49,16 +54,18 @@ export function getBillingCycleEnd(date: Date = new Date()): string {
 
 export function getAllBillingCycles(count: number = 6): Array<{ start: string; end: string; label: string }> {
   const cycles: Array<{ start: string; end: string; label: string }> = [];
-  let current = new Date();
-
+  // Get current billing cycle
+  let currentCycle = getBillingCycle(new Date());
+  
   for (let i = 0; i < count; i++) {
-    const { start, end } = getBillingCycle(current);
     cycles.push({
-      start: format(start, 'yyyy-MM-dd'),
-      end: format(end, 'yyyy-MM-dd'),
-      label: `${format(start, 'dd/MM/yyyy')} - ${format(end, 'dd/MM/yyyy')}`,
+      start: format(currentCycle.start, 'yyyy-MM-dd'),
+      end: format(currentCycle.end, 'yyyy-MM-dd'),
+      label: `${format(currentCycle.start, 'dd/MM/yyyy')} - ${format(currentCycle.end, 'dd/MM/yyyy')}`,
     });
-    current = addMonths(start, -1);
+    // Move to previous cycle: subtract 1 month from start date
+    const prevMonth = addMonths(currentCycle.start, -1);
+    currentCycle = getBillingCycle(prevMonth);
   }
 
   return cycles.reverse();
