@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuthStore, hasRole } from '../stores/authStore';
 import { formatINR, percentage, getBillingCycle, getBillingCycleLabel, cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight, Download, Award, TrendingUp, TrendingDown, Minus, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Award, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Spinner from '../components/ui/Spinner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
@@ -27,7 +26,6 @@ type SortField = 'revenue' | 'leads' | 'attendance' | 'calls' | 'talkTime' | 'ar
 type SortDir = 'asc' | 'desc';
 
 export default function PerformancePage() {
-  const { profile } = useAuthStore();
   const [performers, setPerformers] = useState<MemberPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [cycleOffset, setCycleOffset] = useState(0);
@@ -91,7 +89,7 @@ export default function PerformancePage() {
         targetMap.set(t.user_id, Number(t.target_value) || 100000);
       });
 
-      const result: MemberPerformance[] = profiles.map((p: any, idx) => {
+      const result: MemberPerformance[] = profiles.map((p: any) => {
         const rev = revenueAgg.get(p.id) || { revenue: 0, leads: 0 };
         const att = attAgg.get(p.id) || { present: 0, total: 0 };
         const kpi = kpiAgg.get(p.id) || { calls: 0, time: 0 };
@@ -113,7 +111,7 @@ export default function PerformancePage() {
           arpu,
           achievement: achievementPct,
           overall,
-          rank: idx + 1,
+          rank: 0,
         };
       });
 
@@ -146,6 +144,7 @@ export default function PerformancePage() {
     const rows = sortedPerformers.map((p) => ({
       Rank: p.rank,
       Name: p.name,
+      Email: p.email,
       Revenue: p.revenue,
       Leads: p.leads,
       'Attendance %': p.attendance,
@@ -283,14 +282,15 @@ export default function PerformancePage() {
             <thead className="table-header sticky top-0">
               <tr>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-amber-400 uppercase w-16">Rank</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('revenue')}>Revenue {sortField === 'revenue' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('leads')}>Leads {sortField === 'leads' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('attendance')}>Attendance % {sortField === 'attendance' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('calls')}>Calls {sortField === 'calls' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('talkTime')}>Talk Time {sortField === 'talkTime' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('arpu')}>ARPU {sortField === 'arpu' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('achievement')}>Achievement % {sortField === 'achievement' && (sortDir === 'asc' ? '^' : 'v')}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('overall')}>Overall {sortField === 'overall' && (sortDir === 'asc' ? '^' : 'v')}</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-secondary uppercase">Team Member</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('revenue')}>Revenue {sortField === 'revenue' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('leads')}>Leads {sortField === 'leads' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('attendance')}>Attendance % {sortField === 'attendance' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('calls')}>Calls {sortField === 'calls' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('talkTime')}>Talk Time {sortField === 'talkTime' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('arpu')}>ARPU {sortField === 'arpu' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('achievement')}>Achievement % {sortField === 'achievement' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-secondary uppercase cursor-pointer hover:text-primary" onClick={() => handleSort('overall')}>Overall Score {sortField === 'overall' && (sortDir === 'asc' ? '↑' : '↓')}</th>
               </tr>
             </thead>
             <tbody>
@@ -307,13 +307,13 @@ export default function PerformancePage() {
                       <span className="text-xs text-secondary">{p.email}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-emerald-400 font-semibold">{formatINR(p.revenue)}</td>
-                  <td className="px-4 py-3 text-sm text-blue-400 font-semibold">{p.leads}</td>
-                  <td className="px-4 py-3 text-sm text-cyan-400 font-semibold">{p.attendance}%</td>
-                  <td className="px-4 py-3 text-sm text-primary">{p.calls}</td>
-                  <td className="px-4 py-3 text-sm text-primary">{p.talkTime}m</td>
-                  <td className="px-4 py-3 text-sm text-amber-400 font-semibold">{formatINR(p.arpu)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-right text-sm text-emerald-400 font-semibold">{formatINR(p.revenue)}</td>
+                  <td className="px-4 py-3 text-right text-sm text-blue-400 font-semibold">{p.leads}</td>
+                  <td className="px-4 py-3 text-right text-sm text-cyan-400 font-semibold">{p.attendance}%</td>
+                  <td className="px-4 py-3 text-right text-sm text-primary">{p.calls}</td>
+                  <td className="px-4 py-3 text-right text-sm text-primary">{p.talkTime}m</td>
+                  <td className="px-4 py-3 text-right text-sm text-amber-400 font-semibold">{formatINR(p.arpu)}</td>
+                  <td className="px-4 py-3 text-right">
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-[rgb(var(--bg-elevated))] rounded-full h-2">
                         <div className={cn('h-2 rounded-full', p.achievement >= 100 ? 'bg-emerald-500' : p.achievement >= 75 ? 'bg-amber-500' : 'bg-red-500')} style={{ width: `${Math.min(p.achievement, 100)}%` }} />
@@ -321,7 +321,7 @@ export default function PerformancePage() {
                       <span className="text-sm font-semibold text-primary">{p.achievement}%</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm font-bold text-blue-400">{p.overall}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-blue-400">{p.overall}</td>
                 </tr>
               ))}
             </tbody>

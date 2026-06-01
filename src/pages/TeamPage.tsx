@@ -82,13 +82,6 @@ const formatDuration = (seconds: number) => {
   return `${mins}m`;
 };
 
-const formatINR = (amount: number) => {
-  if (amount === 0) return '₹0';
-  return new Intl.NumberFormat('en-IN', {
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
 export default function TeamPage() {
   const [members, setMembers] = useState<ExtendedProfile[]>([]);
   const [rankedMembers, setRankedMembers] = useState<RankedMember[]>([]);
@@ -132,28 +125,24 @@ export default function TeamPage() {
       const cs = '2026-05-26';
       const ce = '2026-06-25';
 
-      // Fetch lead assignments
       const { data: leads } = await supabase
         .from('lead_assignments')
         .select('user_id, revenue, leads_assigned')
         .gte('billing_cycle_start', cs)
         .lte('billing_cycle_end', ce);
 
-      // Fetch daily_kpi for calls and talk time
       const { data: kpi } = await supabase
         .from('daily_kpi')
         .select('user_id, call_attempts, talk_time')
         .gte('date', cs)
         .lte('date', ce);
 
-      // Fetch attendance
       const { data: attendance } = await supabase
         .from('attendance_entries')
         .select('user_id, status')
         .gte('date', cs)
         .lte('date', ce);
 
-      // Fetch monthly targets
       const { data: targets } = await supabase
         .from('monthly_targets')
         .select('user_id, target_value')
@@ -161,7 +150,6 @@ export default function TeamPage() {
         .eq('billing_cycle_start', cs)
         .eq('billing_cycle_end', ce);
 
-      // Aggregate per user
       const userMap = new Map();
       
       members.forEach(member => {
@@ -179,7 +167,6 @@ export default function TeamPage() {
         });
       });
 
-      // Add revenue and leads
       leads?.forEach(l => {
         const user = userMap.get(l.user_id);
         if (user) {
@@ -188,7 +175,6 @@ export default function TeamPage() {
         }
       });
 
-      // Add calls and talk time
       kpi?.forEach(k => {
         const user = userMap.get(k.user_id);
         if (user) {
@@ -197,7 +183,6 @@ export default function TeamPage() {
         }
       });
 
-      // Calculate attendance percentage
       const attendanceCount = new Map();
       const presentStatuses = ['present', 'half_day'];
       attendance?.forEach(a => {
@@ -214,14 +199,12 @@ export default function TeamPage() {
         }
       });
 
-      // Set default attendance for users with no records
       userMap.forEach(user => {
         if (user.attendance_pct === 0 && user.total_leads > 0) {
           user.attendance_pct = 100;
         }
       });
 
-      // Calculate achievement percentage
       const targetMap = new Map();
       targets?.forEach(t => {
         targetMap.set(t.user_id, t.target_value);
@@ -233,7 +216,6 @@ export default function TeamPage() {
         const achievement_pct = user.total_revenue > 0 ? Math.round((user.total_revenue / target) * 100 * 10) / 10 : 0;
         const arpu = user.total_leads > 0 ? user.total_revenue / user.total_leads : 0;
         
-        // Calculate overall score (custom formula)
         const revenueScore = Math.min((user.total_revenue / 100000) * 0.4, 40);
         const callsScore = Math.min((user.total_calls / 500) * 0.3, 30);
         const attendanceScore = (user.attendance_pct / 100) * 30;
@@ -271,7 +253,6 @@ export default function TeamPage() {
     }
   }, [members, fetchRankedMembers]);
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       setShowActionsMenu(null);
@@ -402,9 +383,9 @@ export default function TeamPage() {
 
       try {
         await navigator.clipboard.writeText(inviteLink);
-        toast.success('Invitation created! Link copied to clipboard. Share it with the new team member.');
+        toast.success('Invitation created! Link copied to clipboard.');
       } catch {
-        toast.success(`Invitation created! Share this link: ${inviteLink}`, { duration: 10000 });
+        toast.success(`Invitation created! Share this link: ${inviteLink}`);
       }
 
       setShowAddModal(false);
@@ -752,70 +733,68 @@ export default function TeamPage() {
         </div>
       </div>
 
-      {/* Team Rankings Table */}
+      {/* Team Rankings Table - FIXED SECTION ONLY */}
       <div className="card rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-primary mb-4">Team Rankings</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary rounded-lg">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-gray-100">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">Rank</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">Team Member</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Revenue</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Leads</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Attendance %</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Calls</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Talk Time</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">ARPU</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Achievement %</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-secondary uppercase">Overall</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Rank</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Team Member</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Revenue</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Leads</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Attendance %</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Calls</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Talk Time</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">ARPU</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Achievement %</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Overall</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {rankedMembers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-secondary">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                     No ranking data available
                   </td>
                 </tr>
               ) : (
                 rankedMembers.map((member, index) => (
-                  <tr key={member.id} className="border-b border-border hover:bg-secondary/20 transition">
-                    <td className="px-4 py-3 text-center font-bold text-primary">{index + 1}</td>
+                  <tr key={member.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 text-center font-bold text-gray-900">{index + 1}</td>
                     <td className="px-4 py-3">
-                      <div>
-                        <div className="font-medium text-primary">{member.full_name}</div>
-                        <div className="text-xs text-muted">{member.email}</div>
-                      </div>
+                      <div className="font-medium text-gray-900">{member.full_name}</div>
+                      <div className="text-xs text-gray-500">{member.email}</div>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-primary">{formatINR(member.total_revenue)}</td>
-                    <td className="px-4 py-3 text-right text-primary">{member.total_leads}</td>
+                    <td className="px-4 py-3 text-right font-medium text-gray-900">
+                      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(member.total_revenue)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-700">{member.total_leads}</td>
                     <td className="px-4 py-3 text-right">
-                      <span className={cn(
-                        'px-2 py-1 rounded-full text-xs font-medium',
-                        member.attendance_pct >= 90 ? 'bg-green-100 text-green-700' :
-                        member.attendance_pct >= 75 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      )}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        member.attendance_pct >= 90 ? 'bg-green-100 text-green-800' :
+                        member.attendance_pct >= 75 ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
                         {member.attendance_pct}%
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-primary">{member.total_calls}</td>
-                    <td className="px-4 py-3 text-right text-primary">{formatDuration(member.total_talk_time)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-primary">
-                      {member.total_leads > 0 ? formatINR(member.arpu) : '-'}
+                    <td className="px-4 py-3 text-right text-gray-700">{member.total_calls}</td>
+                    <td className="px-4 py-3 text-right text-gray-700">{formatDuration(member.total_talk_time)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                      {member.total_leads > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(member.arpu) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className={cn(
-                        'px-2 py-1 rounded-full text-xs font-medium',
-                        member.achievement_pct >= 100 ? 'bg-green-100 text-green-700' :
-                        member.achievement_pct >= 75 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      )}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        member.achievement_pct >= 100 ? 'bg-green-100 text-green-800' :
+                        member.achievement_pct >= 50 ? 'bg-blue-100 text-blue-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
                         {member.achievement_pct}%
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-primary">{member.overall_score}</td>
+                    <td className="px-4 py-3 text-right font-bold text-gray-900">{member.overall_score}</td>
                   </tr>
                 ))
               )}
@@ -900,21 +879,11 @@ export default function TeamPage() {
 
       {/* Bulk Actions */}
       {selectedMembers.size > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between" style={{ background: 'rgb(var(--bg-card))', borderColor: 'rgb(var(--border-default))' }}>
-          <span className="text-blue-700" style={{ color: 'rgb(var(--text-primary))' }}>
-            {selectedMembers.size} member{selectedMembers.size > 1 ? 's' : ''} selected
-          </span>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between">
+          <span>{selectedMembers.size} member{selectedMembers.size > 1 ? 's' : ''} selected</span>
           <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedMembers(new Set())}
-              className="btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-1"
-            >
+            <button onClick={() => setSelectedMembers(new Set())} className="btn-secondary">Cancel</button>
+            <button onClick={handleBulkDelete} className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-1">
               <Trash2 className="w-4 h-4" />
               Delete Selected
             </button>
@@ -950,54 +919,25 @@ export default function TeamPage() {
             <tbody>
               {filteredMembers.length === 0 ? (
                 <tr className="table-row">
-                  <td colSpan={9} className="px-4 py-8 text-center text-secondary">
-                    No team members found
-                  </td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-secondary">No team members found</td>
                 </tr>
               ) : (
                 filteredMembers.map((member) => (
-                  <tr
-                    key={member.id}
-                    className={cn(
-                      'table-row',
-                      selectedMembers.has(member.id) && 'bg-blue-50'
-                    )}
-                  >
+                  <tr key={member.id} className={cn('table-row', selectedMembers.has(member.id) && 'bg-blue-50')}>
                     <td className="px-4 py-3">
                       <button onClick={() => toggleSelectMember(member.id)} className="p-1 hover:bg-[rgb(var(--bg-elevated))] rounded">
-                        {selectedMembers.has(member.id) ? (
-                          <CheckSquare className="w-5 h-5 text-blue-600" />
-                        ) : (
-                          <Square className="w-5 h-5 text-secondary" />
-                        )}
+                        {selectedMembers.has(member.id) ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5 text-secondary" />}
                       </button>
                     </td>
                     <td className="px-4 py-3">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'full_name' ? (
                         <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={inlineValue}
-                            onChange={(e) => setInlineValue(e.target.value)}
-                            className="input px-2 py-1"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleInlineEdit(member);
-                              if (e.key === 'Escape') cancelInlineEdit();
-                            }}
-                          />
-                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={cancelInlineEdit} className="p-1 text-red-600">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                          <input type="text" value={inlineValue} onChange={(e) => setInlineValue(e.target.value)} className="input px-2 py-1" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEdit(member); if (e.key === 'Escape') cancelInlineEdit(); }} />
+                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="p-1 text-red-600"><XIcon className="w-4 h-4" /></button>
                         </div>
                       ) : (
-                        <div
-                          className="flex items-center gap-2 cursor-pointer group"
-                          onClick={() => startInlineEdit(member, 'full_name')}
-                        >
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startInlineEdit(member, 'full_name')}>
                           <span className="font-medium text-primary">{member.full_name}</span>
                           <Edit2 className="w-3 h-3 text-secondary opacity-0 group-hover:opacity-100 transition" />
                         </div>
@@ -1006,29 +946,12 @@ export default function TeamPage() {
                     <td className="px-4 py-3">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'email' ? (
                         <div className="flex items-center gap-1">
-                          <input
-                            type="email"
-                            value={inlineValue}
-                            onChange={(e) => setInlineValue(e.target.value)}
-                            className="input px-2 py-1 w-48"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleInlineEdit(member);
-                              if (e.key === 'Escape') cancelInlineEdit();
-                            }}
-                          />
-                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={cancelInlineEdit} className="p-1 text-red-600">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                          <input type="email" value={inlineValue} onChange={(e) => setInlineValue(e.target.value)} className="input px-2 py-1 w-48" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEdit(member); if (e.key === 'Escape') cancelInlineEdit(); }} />
+                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="p-1 text-red-600"><XIcon className="w-4 h-4" /></button>
                         </div>
                       ) : (
-                        <div
-                          className="flex items-center gap-2 cursor-pointer group"
-                          onClick={() => startInlineEdit(member, 'email')}
-                        >
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startInlineEdit(member, 'email')}>
                           <span className="text-secondary text-sm">{member.email}</span>
                           <Edit2 className="w-3 h-3 text-secondary opacity-0 group-hover:opacity-100 transition" />
                         </div>
@@ -1037,29 +960,12 @@ export default function TeamPage() {
                     <td className="px-4 py-3 hidden md:table-cell">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'phone' ? (
                         <div className="flex items-center gap-1">
-                          <input
-                            type="tel"
-                            value={inlineValue}
-                            onChange={(e) => setInlineValue(e.target.value)}
-                            className="input px-2 py-1 w-32"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleInlineEdit(member);
-                              if (e.key === 'Escape') cancelInlineEdit();
-                            }}
-                          />
-                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={cancelInlineEdit} className="p-1 text-red-600">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                          <input type="tel" value={inlineValue} onChange={(e) => setInlineValue(e.target.value)} className="input px-2 py-1 w-32" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEdit(member); if (e.key === 'Escape') cancelInlineEdit(); }} />
+                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="p-1 text-red-600"><XIcon className="w-4 h-4" /></button>
                         </div>
                       ) : (
-                        <div
-                          className="flex items-center gap-2 cursor-pointer group"
-                          onClick={() => startInlineEdit(member, 'phone')}
-                        >
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startInlineEdit(member, 'phone')}>
                           <span className="text-secondary text-sm">{member.phone || '-'}</span>
                           <Edit2 className="w-3 h-3 text-secondary opacity-0 group-hover:opacity-100 transition" />
                         </div>
@@ -1068,32 +974,13 @@ export default function TeamPage() {
                     <td className="px-4 py-3 hidden lg:table-cell">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'designation' ? (
                         <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={inlineValue}
-                            onChange={(e) => setInlineValue(e.target.value)}
-                            className="input px-2 py-1 w-32"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleInlineEdit(member);
-                              if (e.key === 'Escape') cancelInlineEdit();
-                            }}
-                          />
-                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={cancelInlineEdit} className="p-1 text-red-600">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                          <input type="text" value={inlineValue} onChange={(e) => setInlineValue(e.target.value)} className="input px-2 py-1 w-32" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEdit(member); if (e.key === 'Escape') cancelInlineEdit(); }} />
+                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="p-1 text-red-600"><XIcon className="w-4 h-4" /></button>
                         </div>
                       ) : (
-                        <div
-                          className="flex items-center gap-2 cursor-pointer group"
-                          onClick={() => startInlineEdit(member, 'designation')}
-                        >
-                          <span className="text-secondary text-sm">
-                            {(member as ExtendedProfile).designation || '-'}
-                          </span>
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startInlineEdit(member, 'designation')}>
+                          <span className="text-secondary text-sm">{(member as ExtendedProfile).designation || '-'}</span>
                           <Edit2 className="w-3 h-3 text-secondary opacity-0 group-hover:opacity-100 transition" />
                         </div>
                       )}
@@ -1101,35 +988,19 @@ export default function TeamPage() {
                     <td className="px-4 py-3">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'role' ? (
                         <div className="flex items-center gap-1">
-                          <select
-                            value={inlineValue}
-                            onChange={(e) => setInlineValue(e.target.value)}
-                            className="input px-2 py-1 text-sm"
-                            autoFocus
-                          >
-                            {roleOptions.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
+                          <select value={inlineValue} onChange={(e) => setInlineValue(e.target.value)} className="input px-2 py-1 text-sm" autoFocus>
+                            {roleOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                           </select>
-                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={cancelInlineEdit} className="p-1 text-red-600">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="p-1 text-red-600"><XIcon className="w-4 h-4" /></button>
                         </div>
                       ) : (
                         <div className="cursor-pointer group" onClick={() => startInlineEdit(member, 'role')}>
-                          <span
-                            className={cn(
-                              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                              member.role === 'super_admin' && 'bg-purple-100 text-purple-700',
-                              member.role === 'admin' && 'bg-blue-100 text-blue-700',
-                              member.role === 'team_member' && 'bg-[rgb(var(--bg-elevated))] text-secondary'
-                            )}
-                          >
+                          <span className={cn('inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                            member.role === 'super_admin' && 'bg-purple-100 text-purple-700',
+                            member.role === 'admin' && 'bg-blue-100 text-blue-700',
+                            member.role === 'team_member' && 'bg-[rgb(var(--bg-elevated))] text-secondary'
+                          )}>
                             {roleOptions.find((r) => r.value === member.role)?.label || member.role}
                           </span>
                           <Edit2 className="w-3 h-3 text-secondary opacity-0 group-hover:opacity-100 transition inline ml-1" />
@@ -1137,120 +1008,38 @@ export default function TeamPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => toggleStatus(member)}
-                        className={cn(
-                          'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition',
-                          member.is_active
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                            : 'bg-red-100 text-red-700 hover:bg-red-200'
-                        )}
-                      >
-                        {member.is_active ? (
-                          <>
-                            <UserCheck className="w-3 h-3 mr-1" />
-                            Active
-                          </>
-                        ) : (
-                          <>
-                            <UserX className="w-3 h-3 mr-1" />
-                            Inactive
-                          </>
-                        )}
+                      <button onClick={() => toggleStatus(member)} className={cn('inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition',
+                        member.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'
+                      )}>
+                        {member.is_active ? <><UserCheck className="w-3 h-3 mr-1" />Active</> : <><UserX className="w-3 h-3 mr-1" />Inactive</>}
                       </button>
                     </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
                       {inlineEdit?.id === member.id && inlineEdit.field === 'joining_date' ? (
                         <div className="flex items-center gap-1">
-                          <input
-                            type="date"
-                            value={inlineValue}
-                            onChange={(e) => setInlineValue(e.target.value)}
-                            className="input px-2 py-1"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleInlineEdit(member);
-                              if (e.key === 'Escape') cancelInlineEdit();
-                            }}
-                          />
-                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={cancelInlineEdit} className="p-1 text-red-600">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                          <input type="date" value={inlineValue} onChange={(e) => setInlineValue(e.target.value)} className="input px-2 py-1" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEdit(member); if (e.key === 'Escape') cancelInlineEdit(); }} />
+                          <button onClick={() => handleInlineEdit(member)} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={cancelInlineEdit} className="p-1 text-red-600"><XIcon className="w-4 h-4" /></button>
                         </div>
                       ) : (
-                        <div
-                          className="flex items-center gap-2 cursor-pointer group"
-                          onClick={() => startInlineEdit(member, 'joining_date')}
-                        >
-                          <span className="text-secondary text-sm">
-                            {(member as ExtendedProfile).joining_date
-                              ? new Date((member as ExtendedProfile).joining_date!).toLocaleDateString()
-                              : '-'}
-                          </span>
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startInlineEdit(member, 'joining_date')}>
+                          <span className="text-secondary text-sm">{(member as ExtendedProfile).joining_date ? new Date((member as ExtendedProfile).joining_date!).toLocaleDateString() : '-'}</span>
                           <Edit2 className="w-3 h-3 text-secondary opacity-0 group-hover:opacity-100 transition" />
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="relative">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowActionsMenu(showActionsMenu === member.id ? null : member.id);
-                          }}
-                          className="p-1 hover:bg-[rgb(var(--bg-elevated))] rounded"
-                        >
+                        <button onClick={(e) => { e.stopPropagation(); setShowActionsMenu(showActionsMenu === member.id ? null : member.id); }} className="p-1 hover:bg-[rgb(var(--bg-elevated))] rounded">
                           <MoreVertical className="w-5 h-5 text-secondary" />
                         </button>
                         {showActionsMenu === member.id && (
-                          <div
-                            className="absolute right-0 mt-1 w-48 card rounded-lg shadow-lg py-1 z-20"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onClick={() => openEditModal(member)}
-                              className="w-full px-4 py-2 text-left text-sm text-primary hover:bg-[rgb(var(--bg-elevated))] flex items-center gap-2"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                              Edit Member
-                            </button>
-                            <button
-                              onClick={() => copyInviteLink(member)}
-                              className="w-full px-4 py-2 text-left text-sm text-primary hover:bg-[rgb(var(--bg-elevated))] flex items-center gap-2"
-                            >
-                              <Copy className="w-4 h-4" />
-                              Copy Invite Link
-                            </button>
-                            <button
-                              onClick={() => toggleStatus(member)}
-                              className="w-full px-4 py-2 text-left text-sm text-primary hover:bg-[rgb(var(--bg-elevated))] flex items-center gap-2"
-                            >
-                              {member.is_active ? (
-                                <>
-                                  <UserX className="w-4 h-4" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="w-4 h-4" />
-                                  Activate
-                                </>
-                              )}
-                            </button>
+                          <div className="absolute right-0 mt-1 w-48 card rounded-lg shadow-lg py-1 z-20" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => openEditModal(member)} className="w-full px-4 py-2 text-left text-sm text-primary hover:bg-[rgb(var(--bg-elevated))] flex items-center gap-2"><Edit2 className="w-4 h-4" />Edit Member</button>
+                            <button onClick={() => copyInviteLink(member)} className="w-full px-4 py-2 text-left text-sm text-primary hover:bg-[rgb(var(--bg-elevated))] flex items-center gap-2"><Copy className="w-4 h-4" />Copy Invite Link</button>
+                            <button onClick={() => toggleStatus(member)} className="w-full px-4 py-2 text-left text-sm text-primary hover:bg-[rgb(var(--bg-elevated))] flex items-center gap-2">{member.is_active ? <><UserX className="w-4 h-4" />Deactivate</> : <><UserCheck className="w-4 h-4" />Activate</>}</button>
                             <hr className="my-1 border-[rgb(var(--border-default))]" />
-                            <button
-                              onClick={() => {
-                                setShowDeleteConfirm(member.id);
-                                setShowActionsMenu(null);
-                              }}
-                              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete Member
-                            </button>
+                            <button onClick={() => { setShowDeleteConfirm(member.id); setShowActionsMenu(null); }} className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" />Delete Member</button>
                           </div>
                         )}
                       </div>
@@ -1268,110 +1057,20 @@ export default function TeamPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-[rgb(var(--border-default))]">
-              <h2 className="text-xl font-semibold text-primary flex items-center gap-2">
-                <UserPlus className="w-5 h-5" />
-                Add Team Member
-              </h2>
+              <h2 className="text-xl font-semibold text-primary flex items-center gap-2"><UserPlus className="w-5 h-5" />Add Team Member</h2>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="input w-full px-3 py-2"
-                  placeholder="John Doe"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="input w-full px-3 py-2"
-                  placeholder="john@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Mobile</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="input w-full px-3 py-2"
-                  placeholder="+91 9876543210"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Designation</label>
-                <input
-                  type="text"
-                  value={formData.designation}
-                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="input w-full px-3 py-2"
-                  placeholder="Software Engineer"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Role</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                  className="input w-full px-3 py-2"
-                >
-                  {roleOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Joining Date</label>
-                <input
-                  type="date"
-                  value={formData.joining_date}
-                  onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
-                  className="input w-full px-3 py-2"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                <label htmlFor="is_active" className="text-sm text-secondary">
-                  Active (can login)
-                </label>
-              </div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Full Name <span className="text-red-500">*</span></label><input type="text" value={formData.full_name} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className="input w-full px-3 py-2" placeholder="John Doe" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Email <span className="text-red-500">*</span></label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="input w-full px-3 py-2" placeholder="john@example.com" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Mobile</label><input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="input w-full px-3 py-2" placeholder="+91 9876543210" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Designation</label><input type="text" value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="input w-full px-3 py-2" placeholder="Software Engineer" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Role</label><select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })} className="input w-full px-3 py-2">{roleOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}</select></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Joining Date</label><input type="date" value={formData.joining_date} onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })} className="input w-full px-3 py-2" /></div>
+              <div className="flex items-center gap-2"><input type="checkbox" id="is_active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="w-4 h-4 rounded" /><label htmlFor="is_active" className="text-sm text-secondary">Active (can login)</label></div>
             </div>
             <div className="p-6 border-t border-[rgb(var(--border-default))] flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setFormData(initialFormData);
-                }}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddMember}
-                disabled={submitting}
-                className="btn-primary disabled:opacity-50 flex items-center gap-2"
-              >
-                {submitting && <Spinner size="sm" />}
-                Add Member
-              </button>
+              <button onClick={() => { setShowAddModal(false); setFormData(initialFormData); }} className="btn-secondary">Cancel</button>
+              <button onClick={handleAddMember} disabled={submitting} className="btn-primary disabled:opacity-50 flex items-center gap-2">{submitting && <Spinner size="sm" />}Add Member</button>
             </div>
           </div>
         </div>
@@ -1382,107 +1081,20 @@ export default function TeamPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-[rgb(var(--border-default))]">
-              <h2 className="text-xl font-semibold text-primary flex items-center gap-2">
-                <Edit2 className="w-5 h-5" />
-                Edit Team Member
-              </h2>
+              <h2 className="text-xl font-semibold text-primary flex items-center gap-2"><Edit2 className="w-5 h-5" />Edit Team Member</h2>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="input w-full px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="input w-full px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Mobile</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="input w-full px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Designation</label>
-                <input
-                  type="text"
-                  value={formData.designation}
-                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="input w-full px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Role</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                  className="input w-full px-3 py-2"
-                >
-                  {roleOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Joining Date</label>
-                <input
-                  type="date"
-                  value={formData.joining_date}
-                  onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
-                  className="input w-full px-3 py-2"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="edit_is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                <label htmlFor="edit_is_active" className="text-sm text-secondary">
-                  Active (can login)
-                </label>
-              </div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Full Name <span className="text-red-500">*</span></label><input type="text" value={formData.full_name} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className="input w-full px-3 py-2" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Email <span className="text-red-500">*</span></label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="input w-full px-3 py-2" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Mobile</label><input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="input w-full px-3 py-2" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Designation</label><input type="text" value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="input w-full px-3 py-2" /></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Role</label><select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })} className="input w-full px-3 py-2">{roleOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}</select></div>
+              <div><label className="block text-sm font-medium text-secondary mb-1">Joining Date</label><input type="date" value={formData.joining_date} onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })} className="input w-full px-3 py-2" /></div>
+              <div className="flex items-center gap-2"><input type="checkbox" id="edit_is_active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="w-4 h-4 rounded" /><label htmlFor="edit_is_active" className="text-sm text-secondary">Active (can login)</label></div>
             </div>
             <div className="p-6 border-t border-[rgb(var(--border-default))] flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowEditModal(false);
-                  setEditingMember(null);
-                  setFormData(initialFormData);
-                }}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditMember}
-                disabled={submitting}
-                className="btn-primary disabled:opacity-50 flex items-center gap-2"
-              >
-                {submitting && <Spinner size="sm" />}
-                Update Member
-              </button>
+              <button onClick={() => { setShowEditModal(false); setEditingMember(null); setFormData(initialFormData); }} className="btn-secondary">Cancel</button>
+              <button onClick={handleEditMember} disabled={submitting} className="btn-primary disabled:opacity-50 flex items-center gap-2">{submitting && <Spinner size="sm" />}Update Member</button>
             </div>
           </div>
         </div>
@@ -1493,27 +1105,10 @@ export default function TeamPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card rounded-xl shadow-xl w-full max-w-sm p-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
-              </div>
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
               <h3 className="text-lg font-semibold text-primary mb-2">Delete Member?</h3>
-              <p className="text-secondary text-sm mb-6">
-                This action cannot be undone. The member will be permanently removed.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(null)}
-                  className="btn-secondary flex-1"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteMember(showDeleteConfirm)}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-                >
-                  Delete
-                </button>
-              </div>
+              <p className="text-secondary text-sm mb-6">This action cannot be undone. The member will be permanently removed.</p>
+              <div className="flex gap-3"><button onClick={() => setShowDeleteConfirm(null)} className="btn-secondary flex-1">Cancel</button><button onClick={() => handleDeleteMember(showDeleteConfirm)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Delete</button></div>
             </div>
           </div>
         </div>
