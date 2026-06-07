@@ -10,9 +10,8 @@ export function formatINR(amount: number): string {
   return `${isNegative ? '-' : ''}₹${formatted}`;
 }
 
+// FIXED: Shows exact numbers, no L/Cr rounding
 export function formatINRShort(amount: number): string {
-  if (amount >= 10000000) return `${formatINR(amount / 10000000).replace('₹', '')}Cr`;
-  if (amount >= 100000) return `${formatINR(amount / 100000).replace('₹', '')}L`;
   return formatINR(amount);
 }
 
